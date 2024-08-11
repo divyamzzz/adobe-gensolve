@@ -25,7 +25,7 @@ def detect_shapes(path_XYs):
     categorized_shapes = []
     for shapes in path_XYs:
         for XY in shapes:
-            if len(XY) < 5:  # Too few points to form a complex shape
+            if len(XY) < 5:  
                 continue
             # Circle Detection
             center = np.mean(XY, axis=0)
@@ -39,7 +39,7 @@ def detect_shapes(path_XYs):
             model = LinearRegression().fit(X, y)
             y_pred = model.predict(X)
             mse = mean_squared_error(y, y_pred)
-            normalized_mse = mse / (np.ptp(y)**2)  # Normalized by the range of y values
+            normalized_mse = mse / (np.ptp(y)**2)  
 
             # Classification based on variance and MSE
             if radius_variance < 0.1 * radius_mean:
@@ -59,12 +59,12 @@ def plot_categorized_shapes(categorized_shapes):
         ax.plot(XY[:, 0], XY[:, 1], c=colours[shape_type], label=shape_type, linewidth=2)
     ax.set_aspect('equal')
     handles, labels = plt.gca().get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))  # Remove duplicates in legend
+    by_label = dict(zip(labels, handles)) 
     plt.legend(by_label.values(), by_label.keys())
     plt.show()
 
 # Example usage
-csv_path = 'frag0.csv'  # Replace with the actual path to your CSV file
+csv_path = 'frag0.csv'  
 path_XYs = read_csv(csv_path)
 categorized_shapes = detect_shapes(path_XYs)
 plot_categorized_shapes(categorized_shapes)
