@@ -27,7 +27,7 @@ def detect_shapes(path_XYs):
         for XY in shapes:
             if len(XY) < 5:  
                 continue
-            # Circle Detection
+            # Circle 
             center = np.mean(XY, axis=0)
             radii = np.linalg.norm(XY - center, axis=1)
             radius_variance = np.std(radii)
@@ -41,7 +41,7 @@ def detect_shapes(path_XYs):
             mse = mean_squared_error(y, y_pred)
             normalized_mse = mse / (np.ptp(y)**2)  
 
-            # Classification based on variance and MSE
+            # variance and MSE
             if radius_variance < 0.1 * radius_mean:
                 categorized_shapes.append(('Circle', XY))
             elif normalized_mse < 0.01:
@@ -63,7 +63,7 @@ def plot_categorized_shapes(categorized_shapes):
     plt.legend(by_label.values(), by_label.keys())
     plt.show()
 
-# Example usage
+
 csv_path = 'frag0.csv'  
 path_XYs = read_csv(csv_path)
 categorized_shapes = detect_shapes(path_XYs)
