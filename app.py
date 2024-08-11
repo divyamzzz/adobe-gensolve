@@ -84,56 +84,61 @@ def detect_symmetry(points):
     result = minimize(reflection_cost, initial_params, method='L-BFGS-B', bounds=[(0, np.pi), (None, None), (None, None)])
     return result.x
 
+def plot_shapes_with_symmetry(title, shapes, symmetry_lines):
+    plt.figure(figsize=(8, 8))
+    for path_index, shape in enumerate(shapes):
+        if path_index == 0:
+            label = "Circle"
+        elif path_index == 1:
+            label = "Star"
+        else:
+            label = "Quadrilateral"
+        plt.plot(shape[:, 0], shape[:, 1], '-', label=f"{label} ({title})")
+
+        (x1, y1), (x2, y2) = symmetry_lines[path_index]
+        plt.plot([x1, x2], [y1, y2], '--', color='grey')
+
+    plt.title(f'Shapes with Symmetry Lines - {title}')
+    plt.xlabel('X Coordinate')
+    plt.ylabel('Y Coordinate')
+    plt.legend(loc='upper right')
+    plt.grid(True)
+    plt.axis('equal')
+    plt.show()
+
+original_symmetry_lines = []
+for path_index, path_shapes in enumerate(shapes_data):
+    for shape_index, shape in enumerate(path_shapes):
+        angle, x0, y0 = detect_symmetry(shape)
+        length = np.max(np.linalg.norm(shape - np.array([x0, y0]), axis=1))
+        original_symmetry_lines.append(((x0 - length * np.cos(angle), y0 - length * np.sin(angle)),
+                                        (x0 + length * np.cos(angle), y0 + length * np.sin(angle))))
+
+plot_shapes_with_symmetry("Original", [shape[0] for shape in shapes_data], original_symmetry_lines)
+
 adjusted_shapes = []
-symmetry_lines = []
+adjusted_symmetry_lines = []
 for path_index, path_shapes in enumerate(shapes_data):
     for shape_index, shape in enumerate(path_shapes):
         if path_index == 0 and shape_index == 0:
             xc, yc, r = fit_circle(shape[:, 0], shape[:, 1])
             circle_points, center = generate_circle_points(xc, yc, r)
             adjusted_shapes.append(circle_points)
-            symmetry_lines.append(((center[0] - r, center[1]), (center[0] + r, center[1])))
+            adjusted_symmetry_lines.append(((center[0] - r, center[1]), (center[0] + r, center[1])))
         elif path_index == 1 and shape_index == 0:
             smooth_star = fit_star(shape)
             star_points = generate_star_points(smooth_star)
             adjusted_shapes.append(star_points)
             angle, x0, y0 = detect_symmetry(star_points)
             length = np.max(np.linalg.norm(star_points - np.array([x0, y0]), axis=1))
-            symmetry_lines.append(((x0 - length * np.cos(angle), y0 - length * np.sin(angle)),
-                                   (x0 + length * np.cos(angle), y0 + length * np.sin(angle))))
+            adjusted_symmetry_lines.append(((x0 - length * np.cos(angle), y0 - length * np.sin(angle)),
+                                            (x0 + length * np.cos(angle), y0 + length * np.sin(angle))))
         elif path_index == 2 and shape_index == 0:
             adjusted_quadrilateral = adjust_to_quadrilateral(shape)
             adjusted_shapes.append(adjusted_quadrilateral)
             angle, x0, y0 = detect_symmetry(adjusted_quadrilateral)
             length = np.max(np.linalg.norm(adjusted_quadrilateral - np.array([x0, y0]), axis=1))
-            symmetry_lines.append(((x0 - length * np.cos(angle), y0 - length * np.sin(angle)),
-                                   (x0 + length * np.cos(angle), y0 + length * np.sin(angle))))
+            adjusted_symmetry_lines.append(((x0 - length * np.cos(angle), y0 - length * np.sin(angle)),
+                                            (x0 + length * np.cos(angle), y0 + length * np.sin(angle))))
 
-output_data = []
-for path_index, shape in enumerate(adjusted_shapes):
-    for point_index, (x, y) in enumerate(shape):
-        output_data.append([path_index + 1, 1, x, y])
-
-df = pd.DataFrame(output_data, columns=['Path', 'Shape', 'X', 'Y'])
-df.to_csv('adjusted_shapes.csv', index=False)
-
-plt.figure(figsize=(8, 8))
-for path_index, shape in enumerate(adjusted_shapes):
-    if path_index == 0:
-        label = "Smooth Circle"
-    elif path_index == 1:
-        label = "Smooth Star"
-    else:
-        label = "Quadrilateral"
-    plt.plot(shape[:, 0], shape[:, 1], '-', label=label)
-
-    (x1, y1), (x2, y2) = symmetry_lines[path_index]
-    plt.plot([x1, x2], [y1, y2], '--', color='grey')
-
-plt.title('Adjusted Shapes with Symmetry Lines')
-plt.xlabel('X Coordinate')
-plt.ylabel('Y Coordinate')
-plt.legend(loc='upper right')
-plt.grid(True)
-plt.axis('equal')
-plt.show()
+plot_shapes_with_symmetry("Smoothed", adjusted_shapes, adjusted_symmetry_lines)
