@@ -1,8 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.spatial import ConvexHull
-from sklearn.cluster import KMeans
 from scipy.optimize import minimize
+from sklearn.cluster import KMeans
 import pandas as pd
 
 # Read the CSV file
@@ -19,11 +18,8 @@ for i in unique_paths:
         XYs.append(XY)
     path_XYs.append(XYs)
 
-# Data for each shape
 shapes_data = path_XYs
-num_paths = len(shapes_data)
 
-# Fit circle function
 def fit_circle(x, y):
     def calc_radius(xc, yc):
         return np.sqrt((x - xc) ** 2 + (y - yc) ** 2)
@@ -42,72 +38,85 @@ def generate_circle_points(xc, yc, r, num_points=100):
     angles = np.linspace(0, 2 * np.pi, num_points)
     x = xc + r * np.cos(angles)
     y = yc + r * np.sin(angles)
-    return np.column_stack((x, y))
+    return np.column_stack((x, y)), (xc, yc)
 
-# Fit star shape
 def fit_star(points, num_peaks=5):
-    # Approximate star by finding vertices using KMeans
     kmeans = KMeans(n_clusters=num_peaks * 2, random_state=42).fit(points)
     vertices = kmeans.cluster_centers_
 
-    # Order vertices by angle
     center = np.mean(vertices, axis=0)
     angles = np.arctan2(vertices[:, 1] - center[1], vertices[:, 0] - center[0])
     sorted_indices = np.argsort(angles)
     ordered_vertices = vertices[sorted_indices]
 
-    # Return as star-like shape
     return ordered_vertices
 
 def generate_star_points(vertices):
-    points = np.vstack((vertices, vertices[0]))  # Connect last point to first
+    points = np.vstack((vertices, vertices[0]))
     return points
 
-# Function to adjust the third shape to form a quadrilateral
 def adjust_to_quadrilateral(points):
-    # Use KMeans to find four central points as the vertices of a quadrilateral
     kmeans = KMeans(n_clusters=4, random_state=42).fit(points)
     vertices = kmeans.cluster_centers_
 
-    # Order the vertices in a clockwise direction
     center = np.mean(vertices, axis=0)
     angles = np.arctan2(vertices[:, 1] - center[1], vertices[:, 0] - center[0])
     sorted_indices = np.argsort(angles)
     quadrilateral = vertices[sorted_indices]
 
-    # Connect the vertices to form a quadrilateral
     adjusted_points = np.vstack((quadrilateral, quadrilateral[0]))
 
     return adjusted_points
 
-# Adjust shapes and replace in the dataset
+def detect_symmetry(points):
+    def reflection_cost(params):
+        angle, x0, y0 = params
+        cos_a, sin_a = np.cos(angle), np.sin(angle)
+        normal = np.array([cos_a, sin_a])
+        midpoint = np.array([x0, y0])
+        
+        reflected_points = points - 2 * ((points - midpoint).dot(normal).reshape(-1, 1)) * normal
+        cost = np.mean(np.linalg.norm(points - reflected_points, axis=1))
+        return cost
+
+    x_m, y_m = np.mean(points, axis=0)
+    initial_params = [0, x_m, y_m]
+    result = minimize(reflection_cost, initial_params, method='L-BFGS-B', bounds=[(0, np.pi), (None, None), (None, None)])
+    return result.x
+
 adjusted_shapes = []
+symmetry_lines = []
 for path_index, path_shapes in enumerate(shapes_data):
     for shape_index, shape in enumerate(path_shapes):
         if path_index == 0 and shape_index == 0:
-            # Smooth the circle
             xc, yc, r = fit_circle(shape[:, 0], shape[:, 1])
-            adjusted_shapes.append(generate_circle_points(xc, yc, r))
+            circle_points, center = generate_circle_points(xc, yc, r)
+            adjusted_shapes.append(circle_points)
+            symmetry_lines.append(((center[0] - r, center[1]), (center[0] + r, center[1])))
         elif path_index == 1 and shape_index == 0:
-            # Smooth the star
             smooth_star = fit_star(shape)
-            adjusted_shapes.append(generate_star_points(smooth_star))
+            star_points = generate_star_points(smooth_star)
+            adjusted_shapes.append(star_points)
+            angle, x0, y0 = detect_symmetry(star_points)
+            length = np.max(np.linalg.norm(star_points - np.array([x0, y0]), axis=1))
+            symmetry_lines.append(((x0 - length * np.cos(angle), y0 - length * np.sin(angle)),
+                                   (x0 + length * np.cos(angle), y0 + length * np.sin(angle))))
         elif path_index == 2 and shape_index == 0:
-            # Adjust to quadrilateral
             adjusted_quadrilateral = adjust_to_quadrilateral(shape)
             adjusted_shapes.append(adjusted_quadrilateral)
+            angle, x0, y0 = detect_symmetry(adjusted_quadrilateral)
+            length = np.max(np.linalg.norm(adjusted_quadrilateral - np.array([x0, y0]), axis=1))
+            symmetry_lines.append(((x0 - length * np.cos(angle), y0 - length * np.sin(angle)),
+                                   (x0 + length * np.cos(angle), y0 + length * np.sin(angle))))
 
-# Prepare data for CSV output
 output_data = []
 for path_index, shape in enumerate(adjusted_shapes):
     for point_index, (x, y) in enumerate(shape):
-        output_data.append([path_index + 1, 1, x, y])  # Path and shape identifiers
+        output_data.append([path_index + 1, 1, x, y])
 
-# Convert to DataFrame and save as CSV
 df = pd.DataFrame(output_data, columns=['Path', 'Shape', 'X', 'Y'])
 df.to_csv('adjusted_shapes.csv', index=False)
 
-# Plot the adjusted shapes
 plt.figure(figsize=(8, 8))
 for path_index, shape in enumerate(adjusted_shapes):
     if path_index == 0:
@@ -118,7 +127,10 @@ for path_index, shape in enumerate(adjusted_shapes):
         label = "Quadrilateral"
     plt.plot(shape[:, 0], shape[:, 1], '-', label=label)
 
-plt.title('Adjusted Shapes')
+    (x1, y1), (x2, y2) = symmetry_lines[path_index]
+    plt.plot([x1, x2], [y1, y2], '--', color='grey')
+
+plt.title('Adjusted Shapes with Symmetry Lines')
 plt.xlabel('X Coordinate')
 plt.ylabel('Y Coordinate')
 plt.legend(loc='upper right')
